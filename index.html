@@ -1,200 +1,74 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-
-<title>Project Cargo Tracking Dashboard</title>
-
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
-<style>
-
-body{
-margin:0;
-font-family:Segoe UI, Arial;
-background:#0e1116;
-color:white;
-}
-
-.header{
-background:#111827;
-padding:18px;
-font-size:22px;
-font-weight:600;
-}
-
-.container{
-display:flex;
-height:92vh;
-}
-
-#map{
-flex:3;
-}
-
-.sidebar{
-flex:1;
-background:#161b22;
-overflow-y:auto;
-padding:15px;
-border-left:1px solid #2d3748;
-}
-
-.shipment{
-padding:12px;
-margin-bottom:10px;
-background:#1f2937;
-border-radius:6px;
-}
-
-.shipment h3{
-margin:0;
-font-size:16px;
-}
-
-.status{
-color:#4ade80;
-font-size:12px;
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="header">
-🌍 Project Logistics Dashboard – Live Vessel Tracking
-</div>
-
-<div class="container">
-
-<div id="map"></div>
-
-<div class="sidebar" id="shipmentList"></div>
-
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
 
-var map = L.map('map').setView([20,20],2);
+var map = L.map('map').setView([20,10],2);
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
 maxZoom:19
 }).addTo(map);
 
-
-/* Shipment Data */
-
-var vessels = [
-
-{
-name:"Brisbane Maersk",
-cargo:"B20 & B21 Staircases and Walkways",
-bl:"HLCUSHA2601BCZD9",
-lat:-23,
-lon:55,
-status:"At Sea"
-},
-
-{
-name:"CMA CGM GUARANI",
-cargo:"Tank and Pipe Insulation / Scissor Lifts",
-bl:"CHN2907150 / QGD2390985",
-lat:10,
-lon:72,
-status:"At Sea"
-},
-
-{
-name:"MSC Oscar",
-cargo:"Fittings by Container",
-bl:"MEDUWG446356",
-lat:18,
-lon:88,
-status:"At Sea"
-},
-
-{
-name:"MXD Xiamen",
-cargo:"Bulk Pipes",
-bl:"106262TJ035/055",
-lat:24,
-lon:118,
-status:"Departed"
-},
-
-{
-name:"MSC JOHANNESBURG V",
-cargo:"2nd Batch Roofs",
-bl:"MEDUKC301547",
-lat:3,
-lon:103,
-status:"At Sea"
-}
-
+var vesselsToTrack = [
+"MSC OSCAR",
+"CMA CGM GUARANI",
+"MSC JOHANNESBURG",
+"BRISBANE MAERSK",
+"MXD XIAMEN"
 ];
 
+var markers = {};
 
-/* Add Markers */
+/* Connect to AIS Stream */
 
-vessels.forEach(function(v){
+const socket = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
-var marker = L.circleMarker([v.lat,v.lon],{
+socket.onopen = function(){
 
-radius:7,
-color:"#4ade80",
-fillColor:"#22c55e",
-fillOpacity:0.9
+let subscription = {
 
+APIKey: "YOUR_AISSTREAM_API_KEY",
+
+BoundingBoxes: [[[-90,-180],[90,180]]]
+
+};
+
+socket.send(JSON.stringify(subscription));
+
+};
+
+
+/* Receive Vessel Positions */
+
+socket.onmessage = function(event){
+
+let data = JSON.parse(event.data);
+
+if(data.MessageType === "PositionReport"){
+
+let vessel = data.MetaData.ShipName;
+
+if(vesselsToTrack.includes(vessel)){
+
+let lat = data.Message.PositionReport.Latitude;
+let lon = data.Message.PositionReport.Longitude;
+
+if(markers[vessel]){
+
+markers[vessel].setLatLng([lat,lon]);
+
+}else{
+
+markers[vessel] = L.circleMarker([lat,lon],{
+radius:8,
+color:"#22c55e"
 }).addTo(map);
 
-marker.bindPopup(
+markers[vessel].bindPopup("<b>"+vessel+"</b>");
 
-"<b>Vessel:</b> "+v.name+"<br>"+
-"<b>Cargo:</b> "+v.cargo+"<br>"+
-"<b>B/L:</b> "+v.bl+"<br>"+
-"<b>Status:</b> "+v.status
+}
 
-);
+}
 
-});
+}
 
-
-/* Sidebar Shipment List */
-
-var list = document.getElementById("shipmentList");
-
-vessels.forEach(function(v){
-
-var div = document.createElement("div");
-
-div.className="shipment";
-
-div.innerHTML=
-
-"<h3>"+v.name+"</h3>"+
-"<div>"+v.cargo+"</div>"+
-"<div>B/L: "+v.bl+"</div>"+
-"<div class='status'>"+v.status+"</div>";
-
-list.appendChild(div);
-
-});
-
-
-/* Auto Refresh (for live API later) */
-
-setInterval(function(){
-
-console.log("Refreshing vessel positions...");
-
-},300000);
+};
 
 </script>
-
-</body>
-
-</html>
